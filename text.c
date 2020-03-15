@@ -6,29 +6,27 @@
 int main(char argc, char **argv)
 {
 	int fd;
-	int val =0;
+	int val =1;
 
-    fd = open("/dev/led", O_RDWR);
+	if(argc != 3)
+	{
+		printf("./text <path> <on/off>\n\r");
+		return 0;
+	}
+    fd = open(argv[1], O_RDWR);
     if (fd < 0)
    	{
        printf("error, can't open\n\r");
     }
-	
-	if(argc != 2)
+
+	if(strcmp(argv[2], "on") == 0)
 	{
-		printf("./text <on/off>\n\r");
-		return 0;
-	}
-	
-	if(strcmp(argv[1], "on") == 0)
-	{
-		val =1;
+		val = 1;
 	}
 	else
 	{
-		val =2;
+		val = 0;
 	}
-	
 	write(fd, &val, 4);
 
 	return 0;
