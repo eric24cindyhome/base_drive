@@ -6,14 +6,24 @@
 int main(char argc, char **argv)
 {
 	int fd;
-	int val =1;
-    fd = open("/dev/xxx", O_RDWR);
+	unsigned int count =0;
+	unsigned char val[4] ={0};
+
+    fd = open("/dev/key", O_RDWR);
     if (fd < 0)
    	{
        printf("error, can't open\n\r");
     }
-	write(fd, &val, 4);
 
+	while(1)
+	{
+		read(fd, val, sizeof(val));
+		if(!val[0] || !val[1] || !val[2] || !val[3])
+		{
+			count++;
+			printf("count= %03d, %d%d%d%d\n\r", count, val[0], val[1], val[2], val[3]);
+		}
+	}
 	return 0;
 }
 
