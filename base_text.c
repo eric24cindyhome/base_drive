@@ -2,6 +2,7 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/fs.h>
+#include <linux/poll.h>
 #include <linux/init.h>
 #include <linux/irq.h>
 #include <linux/interrupt.h>
@@ -23,9 +24,9 @@ volatile unsigned long *GPGCON = NULL;
 volatile unsigned long *GPGDAT = NULL;
 
 static DECLARE_WAIT_QUEUE_HEAD(wq);
-static volatile int condition =0;
 
 unsigned char val = 0;
+unsigned int event_val =0;
 
 
 /*
@@ -61,8 +62,8 @@ static irqreturn_t irq_deal_code(int irq, void *dev_id)
 		val = (key_p->key_val);
 	}
 	
-	condition =1;
 	wake_up_interruptible(&wq);
+	event_val =1;
 	return 0;
 }
 
@@ -84,10 +85,10 @@ static ssize_t base_text_read(struct file *file, char __user *buff, size_t n, lo
 		return -EINVAL;
 	}
 
-	wait_event_interruptible(wq, condition);
+//	wait_event_interruptible(wq, condition);
 	
 	copy_to_user(buff, &val, 1);
-	condition =0;
+//	condition =0;
 	
 	return 1;
 }
@@ -102,12 +103,27 @@ static int base_text_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
+static unsigned int base_text_poll(struct file *file,
+				 struct poll_table_struct *wait)
+{
+	unsigned int mask =0;
+	poll_wait(file, &wq, wait);
+
+	if(event_val)
+	{
+		mask |= POLLIN | POLLRDNORM;
+	}
+	event_val =0;
+	return mask;
+}
+
 
 static const struct file_operations base_text_fops = {
 	.owner		= THIS_MODULE,
 	.open		= base_text_open,
 	.read       = base_text_read,
 	.release    = base_text_release,
+	.poll       = base_text_poll,
 };
 
 int major = 0;
