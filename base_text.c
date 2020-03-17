@@ -3,6 +3,8 @@
 #include <linux/kernel.h>
 #include <linux/fs.h>
 #include <linux/init.h>
+#include <linux/irq.h>
+#include <linux/interrupt.h>
 #include <linux/delay.h>
 #include <asm/io.h>
 #include <asm/irq.h>
@@ -20,48 +22,92 @@ volatile unsigned long *GPFDAT = NULL;
 volatile unsigned long *GPGCON = NULL;
 volatile unsigned long *GPGDAT = NULL;
 
+static DECLARE_WAIT_QUEUE_HEAD(wq);
+static volatile int condition =0;
+
+unsigned char val = 0;
+
+
 /*
  * EINT0(GPF0)   D10(GPF4)
  * EINT2(GPF2)   D11(GPF5)
  * EINT11(GPG3)  D12(GPF6)
  * EINT19(GPG11)  ALL	
  */
+ struct pin_des{
+	int pin;
+	int key_val;
+ };
+
+ struct pin_des every_pin_des[4]={
+ 	{S3C2410_GPF0, 0X01},
+ 	{S3C2410_GPF2, 0X02},
+ 	{S3C2410_GPG3, 0X03},
+ 	{S3C2410_GPG11, 0X04},
+ };
+
+static irqreturn_t irq_deal_code(int irq, void *dev_id)
+{
+//	printk("irq =%d\n\r",irq);
+	struct pin_des *key_p =(struct pin_des *)dev_id;
+	int val_pin = s3c2410_gpio_getpin(key_p->pin);
+
+	if(val_pin)  //松开
+	{
+		val = 0x80 | (key_p->key_val);
+	}
+	else
+	{
+		val = (key_p->key_val);
+	}
+	
+	condition =1;
+	wake_up_interruptible(&wq);
+	return 0;
+}
+
 
 static int base_text_open(struct inode *inode, struct file *file)
 {
-//	*GPFCON &= ~((3 << 8) | (3 << 10) | (3 << 12));
-//	*GPFCON |= ((1 << 8) | (1 << 10) | (1 << 12));	
-//	*GPFDAT |= (7 << 4);
-	*GPFCON &= ~((0x3 << 0) | (0x3 << 4));
-	*GPGCON &= ~((0x3 << 6) | (0x3 << 22));
-
+	request_irq(IRQ_EINT0, irq_deal_code, IRQ_TYPE_EDGE_BOTH, "key0", &every_pin_des[0]);
+	request_irq(IRQ_EINT2, irq_deal_code, IRQ_TYPE_EDGE_BOTH, "key1", &every_pin_des[1]);
+	request_irq(IRQ_EINT11, irq_deal_code, IRQ_TYPE_EDGE_BOTH, "key2", &every_pin_des[2]);	
+	request_irq(IRQ_EINT19, irq_deal_code, IRQ_TYPE_EDGE_BOTH, "key3", &every_pin_des[3]);
+	
 	return 0;
 }
 
 static ssize_t base_text_read(struct file *file, char __user *buff, size_t n, loff_t *offp)
 {
-	unsigned char key[4];
-
-	if(n !=sizeof(key))
+	if(n !=1)
 	{
 		return -EINVAL;
 	}
-	
-	key[0] = ((*GPFDAT) & (1 << 0))? 1 : 0;
-	key[1] = ((*GPFDAT) & (1 << 2))? 1 : 0;
-	
-	key[2] = ((*GPGDAT) & (1 << 3))? 1 : 0;
-	key[3] = ((*GPGDAT) & (1 << 11))? 1 : 0;
 
-	copy_to_user(buff, key, sizeof(key));
+	wait_event_interruptible(wq, condition);
 	
-	return sizeof(key);
+	copy_to_user(buff, &val, 1);
+	condition =0;
+	
+	return 1;
 }
+
+static int base_text_release(struct inode *inode, struct file *file)
+{
+	free_irq(IRQ_EINT0, &every_pin_des[0]);
+	free_irq(IRQ_EINT2, &every_pin_des[1]);
+	free_irq(IRQ_EINT11, &every_pin_des[2]);
+	free_irq(IRQ_EINT19, &every_pin_des[3]);
+	
+	return 0;
+}
+
 
 static const struct file_operations base_text_fops = {
 	.owner		= THIS_MODULE,
 	.open		= base_text_open,
 	.read       = base_text_read,
+	.release    = base_text_release,
 };
 
 int major = 0;

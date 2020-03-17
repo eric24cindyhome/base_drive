@@ -6,8 +6,7 @@
 int main(char argc, char **argv)
 {
 	int fd;
-	unsigned int count =0;
-	unsigned char val[4] ={0};
+	unsigned char val =0;
 
     fd = open("/dev/key", O_RDWR);
     if (fd < 0)
@@ -17,12 +16,8 @@ int main(char argc, char **argv)
 
 	while(1)
 	{
-		read(fd, val, sizeof(val));
-		if(!val[0] || !val[1] || !val[2] || !val[3])
-		{
-			count++;
-			printf("count= %03d, %d%d%d%d\n\r", count, val[0], val[1], val[2], val[3]);
-		}
+		read(fd, &val, 1);
+		printf("0x%x\n\r", val);
 	}
 	return 0;
 }
