@@ -1,37 +1,43 @@
 #include <stdio.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <fcntl.h>
-#include <poll.h>
+#include <signal.h>
+
+int fd;
+
+static void SIGAL_DEAL_CODE(int signe)
+{
+//	static unsigned int cnt =0;
+
+//	printf("sinal: %d, %d\n\r", signe, ++cnt);
+	int val =0;
+
+	read(fd, &val, 1);
+	printf("0x%x\n\r", val);
+}
+
 
 int main(char argc, char **argv)
 {
-	int fd;
-	unsigned char val =0;
-	int res =0;
-	struct pollfd fds;
+	int Oflags =0;
+	
+	fd =open("/dev/key", O_RDWR);
+	if(fd < 0)
+	{
+		printf("cant not open!\n\r");
+	}
 
-    fd = open("/dev/key", O_RDWR);
-    if (fd < 0)
-   	{
-       printf("error, can't open\n\r");
-    }
-
-	fds.fd =fd;
-	fds.events =POLLIN;
-
+	fcntl(fd, F_SETOWN, getpid());
+	Oflags = fcntl(fd, F_GETFL);
+	fcntl(fd, F_SETFL, Oflags | FASYNC);
+	
+	signal(SIGIO, SIGAL_DEAL_CODE);
+	
 	while(1)
 	{
-		res =poll(&fds, 1, 5000);
-		if(res == 0)
-		{
-			printf("timeout!wait...\n\r");
-		}
-		else
-		{
-			read(fd, &val, 1);
-			printf("0x%x\n\r", val);
-		}
+		sleep(1000);
 	}
 	return 0;
 }

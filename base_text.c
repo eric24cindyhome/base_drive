@@ -24,6 +24,8 @@ volatile unsigned long *GPGCON = NULL;
 volatile unsigned long *GPGDAT = NULL;
 
 static DECLARE_WAIT_QUEUE_HEAD(wq);
+static struct fasync_struct *base_async_queue;
+
 
 unsigned char val = 0;
 unsigned int event_val =0;
@@ -63,6 +65,7 @@ static irqreturn_t irq_deal_code(int irq, void *dev_id)
 	}
 	
 	wake_up_interruptible(&wq);
+	kill_fasync(&base_async_queue, SIGIO, POLL_IN);
 	event_val =1;
 	return 0;
 }
@@ -117,6 +120,12 @@ static unsigned int base_text_poll(struct file *file,
 	return mask;
 }
 
+ static int base_text_fasync(int fd, struct file *filep, int mode)
+ {
+	 return fasync_helper(fd, filep, mode, &base_async_queue);
+ }
+			
+
 
 static const struct file_operations base_text_fops = {
 	.owner		= THIS_MODULE,
@@ -124,6 +133,7 @@ static const struct file_operations base_text_fops = {
 	.read       = base_text_read,
 	.release    = base_text_release,
 	.poll       = base_text_poll,
+	.fasync     = base_text_fasync,
 };
 
 int major = 0;
