@@ -25,10 +25,13 @@ volatile unsigned long *GPGDAT = NULL;
 
 static DECLARE_WAIT_QUEUE_HEAD(wq);
 static struct fasync_struct *base_async_queue;
+static struct timer_list timer;
 
 
 unsigned char val = 0;
 unsigned int event_val =0;
+struct pin_des *key_pa =NULL;
+
 
 
 /*
@@ -52,21 +55,9 @@ unsigned int event_val =0;
 static irqreturn_t irq_deal_code(int irq, void *dev_id)
 {
 //	printk("irq =%d\n\r",irq);
-	struct pin_des *key_p =(struct pin_des *)dev_id;
-	int val_pin = s3c2410_gpio_getpin(key_p->pin);
+	key_pa =(struct pin_des *)dev_id;
 
-	if(val_pin)  //松开
-	{
-		val = 0x80 | (key_p->key_val);
-	}
-	else
-	{
-		val = (key_p->key_val);
-	}
-	
-	wake_up_interruptible(&wq);
-	kill_fasync(&base_async_queue, SIGIO, POLL_IN);
-	event_val =1;
+	mod_timer(&timer , jiffies + HZ/100);
 	return 0;
 }
 
@@ -124,6 +115,34 @@ static unsigned int base_text_poll(struct file *file,
  {
 	 return fasync_helper(fd, filep, mode, &base_async_queue);
  }
+
+ 
+ static int base_text_kill(void)
+ {
+ 	 int val_pin =0;
+	 struct pin_des *key_p =key_pa;
+
+	 if(!key_p)
+	 	return 0;
+	 
+	 val_pin = s3c2410_gpio_getpin(key_p->pin);
+	 
+	 if(val_pin)  //松开
+	 {
+		 val = 0x80 | (key_p->key_val);
+	 }
+	 else
+	 {
+		 val = (key_p->key_val);
+	 }
+	 
+	 wake_up_interruptible(&wq);
+	 kill_fasync(&base_async_queue, SIGIO, POLL_IN);
+	 event_val =1;
+
+	return 0;
+ }
+ 
 			
 
 
@@ -138,13 +157,18 @@ static const struct file_operations base_text_fops = {
 
 int major = 0;
 static int base_text_init(void)
-{
+{	
 	major = register_chrdev(0, "cindy", &base_text_fops);
 	
 	basecode_class = class_create(THIS_MODULE, "cindyhome");
 
 	basecode_class_drv = class_device_create(basecode_class, NULL, MKDEV(major, 0), NULL, "key");
-		
+	
+	
+	init_timer(&timer);
+	timer.function = base_text_kill;
+	add_timer(&timer);
+	
 	GPFCON =(volatile unsigned long )ioremap(0x56000050, 16);
 	GPFDAT =(volatile unsigned long )(GPFCON + 1);
 
