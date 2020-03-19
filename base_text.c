@@ -136,9 +136,9 @@ static unsigned int base_text_poll(struct file *file,
 		 val = (key_p->key_val);
 	 }
 	 
-	 wake_up_interruptible(&wq);
+//	 wake_up_interruptible(&wq);
 	 kill_fasync(&base_async_queue, SIGIO, POLL_IN);
-	 event_val =1;
+//	 event_val =1;
 
 	return 0;
  }
